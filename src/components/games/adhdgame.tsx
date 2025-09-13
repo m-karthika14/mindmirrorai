@@ -737,7 +737,7 @@ const ADHDGame: React.FC<ADHDGameProps> = ({ onGameComplete }) => {
           {stage === 'report' && <ReportScreen analysis={analysis} onRestart={handleRestart} key="report" />}
         </AnimatePresence>
       </div>
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-500">NeuroMatrix — prototype • Educational demo • Not a clinical tool</div>
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-500">NeuroMatrix</div>
     </div>
   );
 };

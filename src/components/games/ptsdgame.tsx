@@ -2,19 +2,9 @@
 // Single-file React app with downloadable JSON report and updated background visuals.
 // Dependencies: react, framer-motion, recharts
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ComposedChart,
-  Line,
-  Scatter,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import PTSDGameLogs from "./PTSDGameLogs";
+import { useNavigate } from "react-router-dom";
 
 /* -------------------- CONFIG & STIMULI -------------------- */
 const TOTAL_TRIALS = 5;
@@ -133,6 +123,25 @@ class SoundEngine {
       }
     }
   }
+
+  stopAllAudio() {
+    console.log('🔇 Stopping all PTSD game audio...');
+    
+    // Stop all HTML audio elements
+    this.audioElements.forEach((audio, key) => {
+      console.log(`🔇 Stopping audio: ${key}`);
+      audio.pause();
+      audio.currentTime = 0;
+    });
+
+    // Stop web audio context if it exists
+    if (this.ctx && this.ctx.state === 'running') {
+      console.log('🔇 Suspending Web Audio Context...');
+      this.ctx.suspend();
+    }
+
+    console.log('✅ All PTSD game audio stopped');
+  }
 }
 
 /* -------------------- BACKGROUND ANIMATION -------------------- */
@@ -199,6 +208,61 @@ function useCanvas() {
   return { canvasRef, spawnParticles };
 }
 
+/* -------------------- FACE MONITORING INTEGRATION -------------------- */
+
+// Face monitoring API functions
+const startFaceMonitoring = async () => {
+  try {
+    const userId = localStorage.getItem('userId');
+    if (!userId) {
+      console.warn('⚠️ No userId found - cannot start face monitoring');
+      return;
+    }
+
+    console.log('🎥 Starting face monitoring for PTSD game...');
+    const response = await fetch('http://localhost:5000/api/face-monitor/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: userId,
+        gameType: 'ptsd'
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Face monitoring started successfully:', result);
+    } else {
+      console.error('❌ Failed to start face monitoring:', await response.text());
+    }
+  } catch (error) {
+    console.error('❌ Error starting face monitoring:', error);
+  }
+};
+
+const stopFaceMonitoring = async () => {
+  try {
+    console.log('🛑 Stopping face monitoring...');
+    const response = await fetch('http://localhost:5000/api/face-monitor/stop', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Face monitoring stopped successfully:', result);
+    } else {
+      console.error('❌ Failed to stop face monitoring:', await response.text());
+    }
+  } catch (error) {
+    console.error('❌ Error stopping face monitoring:', error);
+  }
+};
+
 /* -------------------- MAIN APP COMPONENT -------------------- */
 
 interface PTSDGameProps {
@@ -206,17 +270,26 @@ interface PTSDGameProps {
 }
 
 export default function NeuroCognitiveResponseTest({ onGameComplete }: PTSDGameProps) {
+  const navigate = useNavigate();
   const [stage, setStage] = useState<string>("intro");
   const [sequence, setSequence] = useState(() => generateSequence());
   const [roundIdx, setRoundIdx] = useState<number>(0);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
-  const [showPTSDLogs, setShowPTSDLogs] = useState(false);
   const soundEngineRef = useRef<SoundEngine | null>(null);
   const appearanceTimestampRef = useRef<number>(0);
   const { canvasRef, spawnParticles } = useCanvas();
 
   useEffect(() => { soundEngineRef.current = new SoundEngine(); }, []);
+
+  // Cleanup effect to stop audio when component unmounts
+  useEffect(() => {
+    return () => {
+      console.log('🔇 PTSD Game component unmounting, stopping all audio and face monitoring...');
+      soundEngineRef.current?.stopAllAudio();
+      stopFaceMonitoring();
+    };
+  }, []);
 
   useEffect(() => {
     if (stage !== "game" || roundIdx >= sequence.length) return;
@@ -235,6 +308,9 @@ export default function NeuroCognitiveResponseTest({ onGameComplete }: PTSDGameP
     setLogs([]);
     setRoundIdx(0);
     setStage("game");
+    
+    // Start face monitoring when game begins
+    startFaceMonitoring();
   }
 
   function handleChoice(chosenColor: string, e: React.MouseEvent) {
@@ -268,64 +344,61 @@ export default function NeuroCognitiveResponseTest({ onGameComplete }: PTSDGameP
     spawnParticles(e.clientX, e.clientY, particleColor);
     setStartTime(null);
     const nextRound = roundIdx + 1;
-    setTimeout(() => { if (nextRound < sequence.length) { setRoundIdx(nextRound); } else { setStage("report"); } }, 350);
-  }
-
-  const report = useMemo(() => {
-    if (logs.length < TOTAL_TRIALS) return null;
-    const correctLogs = logs.filter(l => l.correct); const rt = correctLogs.map(l => l.rt); const avgRt = rt.length ? rt.reduce((s, l) => s + l, 0) / rt.length : 0; const emotional = logs.filter(l => l.type === "Sudden" && l.correct); const neutral = logs.filter(l => l.type === "Calm" && l.correct); const avgEm = emotional.length ? emotional.reduce((s, l) => s + l.rt, 0) / emotional.length : 0; const avgNe = neutral.length ? neutral.reduce((s, l) => s + l.rt, 0) / neutral.length : 0; const cogLoad = Math.max(0, avgEm - avgNe); const variance = rt.reduce((s, l) => s + Math.pow(l.rt - avgRt, 2), 0) / rt.length; const rtStDev = Math.sqrt(variance); const firstThird = correctLogs.slice(0, Math.floor(correctLogs.length / 3)).map(l => l.rt); const lastThird = correctLogs.slice(-Math.floor(correctLogs.length / 3)).map(l => l.rt); const avgFirst = firstThird.length ? firstThird.reduce((a, b) => a + b, 0) / firstThird.length : 0; const avgLast = lastThird.length ? lastThird.reduce((a, b) => a + b, 0) / lastThird.length : 0;
-    const reportData = {
-      attention: { value: `${Math.round((correctLogs.length / logs.length) * 100)}%`, explanation: `Focus on the task. Lower scores may indicate difficulty filtering distractions.` },
-      motorControl: { value: `${Math.round(avgRt)} ms`, explanation: `Average speed of correct responses. Reflects basic processing speed.` },
-      cognitiveLoad: { value: `${Math.round(cogLoad)} ms`, explanation: `Performance slowdown after a startling stimulus. Higher values suggest greater impact from stressors.` },
-      inhibitoryControl: { value: `${logs.length - correctLogs.length}`, explanation: `Number of incorrect choices. Measures impulsivity or the ability to suppress incorrect responses.` },
-      behavioralStability: { value: avgLast > avgFirst ? 'Declined' : 'Stable', explanation: `Change in reaction time from start to finish. A decline can indicate fatigue.` },
-      neuroBalance: { value: `${Math.round(rtStDev)} ms`, explanation: `Reaction Time Variance. Lower values indicate high consistency and cognitive stability.` },
-      chartData: logs.map(l => ({ ...l, mistake: l.correct ? null : l.rt })),
-    };
-
-    // Trigger save when report is ready
-    setTimeout(() => {
-      console.log('🧠 PTSD report ready, saving data...');
-      savePTSDGameData(logs, reportData);
-    }, 1000);
-
-    return reportData;
-  }, [logs]);
-
-  // --- NEW FUNCTION TO HANDLE REPORT DOWNLOAD ---
-  function handleDownloadReport() {
-    if (!report || !logs.length) return;
-    const reportData = {
-      summaryMetrics: {
-        attentionalControl: report.attention,
-        processingSpeed_ms: report.motorControl,
-        stressorImpact_ms: report.cognitiveLoad,
-        inhibitoryControl_errors: report.inhibitoryControl,
-        sustainedFocus: report.behavioralStability,
-        responseConsistency_stdev_ms: report.neuroBalance,
-      },
-      detailedLog: logs.map(log => ({
-        round: log.round,
-        imageType: log.type,
-        stimulus: log.alt,
-        appearanceTimestamp: new Date(log.appearanceTimestamp).toISOString(),
-        reactionTime_ms: log.rt,
-        outcome: log.correct ? 'Correct' : 'Incorrect',
-        chosenColor: log.chosen,
-        correctColor: log.labelColor,
-      }))
-    };
-    const jsonString = JSON.stringify(reportData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'NeuroCognitiveReport.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => { 
+      if (nextRound < sequence.length) { 
+        setRoundIdx(nextRound); 
+      } else { 
+        // PTSD game completed - save data immediately and skip report
+        console.log('🎉 PTSD Game Complete! Saving data and going to report page...');
+        
+        // Generate report data for saving to MongoDB
+        const finalLogs = [...logs, logEntry];
+        const correctLogs = finalLogs.filter(l => l.correct);
+        const rt = correctLogs.map(l => l.rt);
+        const avgRt = rt.length ? rt.reduce((s, l) => s + l, 0) / rt.length : 0;
+        const emotional = finalLogs.filter(l => l.type === "Sudden" && l.correct);
+        const neutral = finalLogs.filter(l => l.type === "Calm" && l.correct);
+        const avgEm = emotional.length ? emotional.reduce((s, l) => s + l.rt, 0) / emotional.length : 0;
+        const avgNe = neutral.length ? neutral.reduce((s, l) => s + l.rt, 0) / neutral.length : 0;
+        const cogLoad = Math.max(0, avgEm - avgNe);
+        const variance = rt.reduce((s, l) => s + Math.pow(l.rt - avgRt, 2), 0) / rt.length;
+        const rtStDev = Math.sqrt(variance);
+        const firstThird = correctLogs.slice(0, Math.floor(correctLogs.length / 3)).map(l => l.rt);
+        const lastThird = correctLogs.slice(-Math.floor(correctLogs.length / 3)).map(l => l.rt);
+        const avgFirst = firstThird.length ? firstThird.reduce((a, b) => a + b, 0) / firstThird.length : 0;
+        const avgLast = lastThird.length ? lastThird.reduce((a, b) => a + b, 0) / lastThird.length : 0;
+        
+        const reportData = {
+          attention: { value: `${Math.round((correctLogs.length / finalLogs.length) * 100)}%`, explanation: `Focus on the task. Lower scores may indicate difficulty filtering distractions.` },
+          motorControl: { value: `${Math.round(avgRt)} ms`, explanation: `Average speed of correct responses. Reflects basic processing speed.` },
+          cognitiveLoad: { value: `${Math.round(cogLoad)} ms`, explanation: `Performance slowdown after a startling stimulus. Higher values suggest greater impact from stressors.` },
+          inhibitoryControl: { value: `${finalLogs.length - correctLogs.length}`, explanation: `Number of incorrect choices. Measures impulsivity or the ability to suppress incorrect responses.` },
+          behavioralStability: { value: avgLast > avgFirst ? 'Declined' : 'Stable', explanation: `Change in reaction time from start to finish. A decline can indicate fatigue.` },
+          neuroBalance: { value: `${Math.round(rtStDev)} ms`, explanation: `Reaction Time Variance. Lower values indicate high consistency and cognitive stability.` }
+        };
+        
+        // Save data to MongoDB immediately (but don't wait for it)
+        savePTSDGameData(finalLogs, reportData);
+        
+        // Stop all audio immediately when game completes
+        console.log('🔇 PTSD Game completed! Stopping all audio...');
+        soundEngineRef.current?.stopAllAudio();
+        
+        // Stop face monitoring when game completes
+        stopFaceMonitoring();
+        
+        // Navigate to report page immediately - don't wait for save to complete
+        console.log('🔄 PTSD Game completed! Navigating to report page...');
+        
+        if (onGameComplete) {
+          console.log('🔄 Using onGameComplete callback');
+          onGameComplete();
+        } else {
+          console.log('🔄 Navigating directly to /report page');
+          navigate('/report');
+        }
+      } 
+    }, 350);
   }
 
   // Save PTSD game data to MongoDB
@@ -493,38 +566,9 @@ export default function NeuroCognitiveResponseTest({ onGameComplete }: PTSDGameP
           <AnimatePresence mode="wait">
             {stage === "intro" && (<motion.div key="intro" {...fade}><h1 style={styles.title}>Cognitive Assessment</h1><p style={styles.lead}>An image with a color name will appear. Click the button that matches the color name as quickly and accurately as possible.</p><motion.button {...buttonAnim} style={styles.primary} onClick={startAssessment}>Begin</motion.button></motion.div>)}
             {stage === "game" && sequence[roundIdx] && (<motion.div key={roundIdx} {...fade} style={styles.gameContainer}><div style={styles.progressRow}>Round {roundIdx + 1} / {sequence.length}</div><motion.div style={styles.stimCard} layoutId={`stim-${roundIdx}`}><img src={sequence[roundIdx].image} alt={sequence[roundIdx].alt} style={styles.stimImage} /><div style={styles.stimLabel}><div style={{...styles.stimLabelText, color: colorToHex(sequence[roundIdx].labelColor) }}>{sequence[roundIdx].labelColor}</div></div></motion.div><div style={styles.buttonGrid}>{COLOR_LABELS.map(c => (<motion.button key={c} {...buttonAnim} onClick={(e) => handleChoice(c, e)} style={{...styles.actionBtn, background: buttonColorGradient(c)}}>{c}</motion.button>))}</div></motion.div>)}
-            {stage === "report" && report && (
-              <motion.div key="report" {...fade} style={styles.reportLayout}>
-                <div style={styles.reportHeader}>
-                  <h2 style={styles.title}>Performance Report</h2>
-                  {/* --- MODIFIED HEADER TO INCLUDE DOWNLOAD BUTTON --- */}
-                  <div style={styles.reportActions}>
-                    <motion.button {...buttonAnim} style={{...styles.ghost, marginRight: '10px'}} onClick={handleDownloadReport}>Download Report</motion.button>
-                    <motion.button {...buttonAnim} style={{...styles.ghost, marginRight: '10px'}} onClick={() => setShowPTSDLogs(true)}>View All PTSD Logs</motion.button>
-                    <motion.button {...buttonAnim} style={styles.ghost} onClick={startAssessment}>Run Again</motion.button>
-                  </div>
-                </div>
-                <div style={styles.reportGrid}>
-                  <Metric title="Attentional Control" {...report.attention} /><Metric title="Processing Speed" {...report.motorControl} /><Metric title="Stressor Impact" {...report.cognitiveLoad} /><Metric title="Inhibitory Control" {...report.inhibitoryControl} /><Metric title="Sustained Focus" {...report.behavioralStability} /><Metric title="Response Consistency" {...report.neuroBalance} />
-                </div>
-                <div style={{ marginTop: 24, height: 250 }}>
-                  <ResponsiveContainer><ComposedChart data={report.chartData}><CartesianGrid stroke="#0f1530" /><XAxis dataKey="round" /><YAxis domain={['dataMin - 50', 'dataMax + 100']}/><Tooltip content={<CustomTooltip />} /><Line type="monotone" dataKey="rt" stroke="#00ffd1" dot={{r:3}} name="Correct RT" /><Scatter dataKey="mistake" fill="#ff7b7b" name="Incorrect RT" /></ComposedChart></ResponsiveContainer>
-                </div>
-                <div style={styles.logContainer}>
-                  <div style={styles.logHeader}><span>Round</span><span>Appearance Time</span><span>Reaction Time</span><span>Outcome</span></div>
-                  <div style={styles.logBody}>{logs.map(log => (<div key={log.round} style={styles.logRow}><span>{log.round}</span><span>{new Date(log.appearanceTimestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><span>{log.rt} ms</span><span style={{color: log.correct ? '#7bffb1' : '#ff8b8b'}}>{log.correct ? 'Correct' : 'Incorrect'}</span></div>))}</div>
-                </div>
-              </motion.div>
-            )}
           </AnimatePresence>
         </main>
       </div>
-      
-      {/* PTSD Game Logs Modal */}
-      <PTSDGameLogs 
-        isOpen={showPTSDLogs} 
-        onClose={() => setShowPTSDLogs(false)} 
-      />
     </div>
   );
 }
@@ -533,8 +577,6 @@ export default function NeuroCognitiveResponseTest({ onGameComplete }: PTSDGameP
 const fade = { initial:{ opacity: 0, y: 10 }, animate:{ opacity: 1, y: 0 }, exit:{ opacity: 0, y: -10 } };
 const buttonAnim = { whileHover:{ scale: 1.03 }, whileTap:{ scale: 0.98 } };
 
-function Metric({ title, value, explanation }: { title: string; value: string; explanation: string }) { return (<div style={styles.metricBox}><div style={{ fontSize: 13, color: "#9fb6ff" }}>{title}</div><div style={{ fontWeight: 800, fontSize: 20, color: "#bfffe6", margin: "6px 0" }}>{value}</div><div style={{ fontSize: 11, color: '#8fa6d9', lineHeight: 1.4 }}>{explanation}</div></div>); }
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => { if (active && payload && payload.length) { const data = payload[0].payload; return (<div style={styles.tooltip}><p><strong>Round {data.round}</strong> ({data.type})</p><p>Correct Label: {data.labelColor}</p><p>Your Choice: {data.chosen}</p>{data.rt && <p>RT: {data.rt} ms</p>}</div>); } return null; };
 const colorToHex = (label: string) => ({ "Red": "#ff6b6b", "Blue": "#6fb3ff", "Green": "#7bffb1", "Yellow": "#ffd36b" }[label] || "#fff");
 const buttonColorGradient = (c: string) => ({ "Red": "linear-gradient(90deg,#ff8b8b,#ff4b6b)", "Blue": "linear-gradient(90deg,#7bdcff,#3b8bff)", "Green": "linear-gradient(90deg,#7bffb1,#3bff8a)", "Yellow": "linear-gradient(90deg,#f9f6a6,#ffd24d)" }[c]);
 

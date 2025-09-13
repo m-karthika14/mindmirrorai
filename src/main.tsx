@@ -2,9 +2,12 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import VantaBackground from './components/layout/VantaBackground.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <VantaBackground>
+      <App />
+    </VantaBackground>
   </StrictMode>
 );

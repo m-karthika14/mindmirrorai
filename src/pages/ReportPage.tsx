@@ -5,17 +5,62 @@ import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Responsi
 import { Download, RotateCcw, Brain, User, Calendar, Clock, Activity, Zap, Target, TrendingDown, AlertCircle } from 'lucide-react';
 // import { format } from 'date-fns';
 import NeonButton from '../components/ui/NeonButton';
-// import MetricCard from '../components/ui/MetricCard';
-// import RiskFlagTable from '../components/ui/RiskFlagTable';
-// import PerformanceTrends from '../components/ui/PerformanceTrends';
-// import DetailedInsights from '../components/ui/DetailedInsights';
-// import PTSDGameLogs from '../components/games/PTSDGameLogs';
+import PerformanceTrends from '../components/PerformanceTrends';
+import ConditionRiskFlags from '../components/ConditionRiskFlags';
+import DetailedInsights from '../components/DetailedInsights';
 
-const ReportPage: React.FC = () => {
+// Sample data - replace with actual data fetching
+const sampleData = {
+  "userId": "Guest_001",
+  "createdAt": "2023-10-10T12:00:00Z",
+  "durationSec": 1475,
+  "gameMetrics": [
+    { "name": "Attention", "value": 75 },
+    { "name": "Motor Control", "value": 82 },
+    { "name": "Cognitive Load", "value": 68 },
+    { "name": "Environmental Stress", "value": 9 },
+    { "name": "Behavioral Stability", "value": 77 },
+    { "name": "NeuroBalance", "value": 84 }
+  ],
+  "visionMetrics": {
+    "contrastSensitivity": 1.5,
+    "colorVision": "normal",
+    "depthPerception": "slight deficit",
+    "visualAcuity": "20/25",
+    "pupilEstimate": 3.2
+  }
+};
+
+const ReportPage = () => {
   const navigate = useNavigate();
+  const [data, setData] = useState(sampleData);
   const [scores, setScores] = useState<number[]>([75, 82, 68, 91, 77, 84]); // 6 metrics now
   const [showContent, setShowContent] = useState(false);
   const [showPTSDLogs, setShowPTSDLogs] = useState(false);
+  const [aiInsight, setAiInsight] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [reportId, setReportId] = useState('');
+  const [currentReport, setCurrentReport] = useState(null);
+  const [allReports, setAllReports] = useState([]);
+
+  useEffect(() => {
+    const fetchAllReports = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/reports');
+        if (response.ok) {
+          const data = await response.json();
+          setAllReports(data);
+        } else {
+          throw new Error('Failed to fetch reports');
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    fetchAllReports();
+  }, []);
 
   useEffect(() => {
     const storedScores = sessionStorage.getItem('gameScores');
@@ -143,195 +188,189 @@ const ReportPage: React.FC = () => {
     alert('Report download feature would be implemented here');
   };
 
+  const handleGenerateInsights = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:5000/api/insights/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch insights');
+      }
+
+      const insights = await response.json();
+      setAiInsight(insights);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFetchReport = async (id) => {
+    if (!id) {
+      setError('Please enter a Report ID');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://localhost:5000/api/reports/${id}`);
+      if (!response.ok) {
+        throw new Error('Report not found');
+      }
+      const reportData = await response.json();
+      setCurrentReport(reportData);
+      setData(reportData.sessionData || reportData); // Handle both schema versions
+      if (reportData.aiJsonReport && reportData.aiTextReport) {
+        setAiInsight({
+          jsonReport: reportData.aiJsonReport,
+          textReport: reportData.aiTextReport,
+        });
+      } else {
+        setAiInsight(null);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGenerateAndSaveInsights = async () => {
+    if (!currentReport) {
+      setError('Please fetch a report first');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://localhost:5000/api/reports/${currentReport._id}/generate-insights`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate and save insights');
+      }
+
+      const updatedReport = await response.json();
+      setCurrentReport(updatedReport);
+      setAiInsight({
+        jsonReport: updatedReport.aiJsonReport,
+        textReport: updatedReport.aiTextReport,
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReportSelection = (selectedReportId) => {
+    setReportId(selectedReportId);
+    // Automatically fetch the selected report
+    handleFetchReport(selectedReportId);
+  };
+
   return (
-    <div className="min-h-screen gradient-bg py-8">
-      <div className="container mx-auto px-4 max-w-7xl">
-        {/* Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="text-center mb-12"
-        >
-          <h1 className="text-4xl md:text-5xl font-bold font-poppins text-white mb-4">
-            Cognitive & Behavioral Profile Report
-          </h1>
-          <p className="text-lg text-gray-400 mb-8">
-            This is not a diagnosis. Results highlight patterns and potential risks.
-          </p>
-          
-          {/* Session Info Card */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="bg-dark-card/80 backdrop-blur-md rounded-xl border border-gray-700/50 p-6 max-w-4xl mx-auto mb-8"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="flex items-center space-x-3">
-                <User className="w-5 h-5 text-neon-cyan" />
-                <div>
-                  <div className="text-sm text-gray-400">Player ID</div>
-                  <div className="text-white font-medium">Guest_001</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Calendar className="w-5 h-5 text-neon-purple" />
-                <div>
-                  <div className="text-sm text-gray-400">Date</div>
-                  <div className="text-white font-medium">{new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Clock className="w-5 h-5 text-neon-pink" />
-                <div>
-                  <div className="text-sm text-gray-400">Duration</div>
-                  <div className="text-white font-medium">{sessionDuration}</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Activity className="w-5 h-5 text-yellow-400" />
-                <div>
-                  <div className="text-sm text-gray-400">Session Type</div>
-                  <div className="text-white font-medium">30 Day Assessment</div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-7xl mx-auto">
+        <Header
+          title="Cognitive & Behavioral Profile Report"
+          subtitle="This is not a diagnosis. Results highlight patterns and potential risks."
+          userId={data.userId}
+        />
 
-          <div className={`text-3xl font-bold text-${getStressAccent()}`}>
-            Overall NeuroBalance: {overallScore}/100
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Main Content */}
+          <div className="md:col-span-2">
+            <div className="my-8">
+              <NeonButton onClick={handleGenerateInsights} disabled={isLoading}>
+                {isLoading ? 'Generating...' : 'Analyze Sample Data'}
+              </NeonButton>
+            </div>
+
+            <div className="my-8 flex items-center gap-4">
+              <input
+                type="text"
+                value={reportId}
+                onChange={(e) => setReportId(e.target.value)}
+                placeholder="Enter Report ID to Fetch"
+                className="bg-gray-800 border border-cyan-400 text-white rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              />
+              <NeonButton onClick={() => handleFetchReport(reportId)} disabled={isLoading}>
+                {isLoading ? 'Fetching...' : 'Fetch Report'}
+              </NeonButton>
+              <NeonButton onClick={handleGenerateAndSaveInsights} disabled={!currentReport || isLoading}>
+                {isLoading ? 'Analyzing...' : 'Generate & Save Insights'}
+              </NeonButton>
+            </div>
+
+            {error && <div className="text-red-500 bg-red-900 p-4 rounded-lg my-4">{`Error: ${error}`}</div>}
+
+            {currentReport && (
+              <div className="bg-gray-800 p-4 rounded-lg mb-8">
+                <h3 className="text-xl font-bold text-cyan-400">Current Report</h3>
+                <p>ID: {currentReport._id}</p>
+                <p>Session ID: {currentReport.sessionId || 'N/A'}</p>
+                <p>User ID: {currentReport.userId}</p>
+                <p>Game Type: {currentReport.gameType}</p>
+              </div>
+            )}
+
+            {aiInsight && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+                <div className="bg-gray-800 p-6 rounded-lg">
+                  <h2 className="text-2xl font-bold mb-4 text-cyan-400">Human-Readable Report</h2>
+                  <pre className="whitespace-pre-wrap font-mono text-sm">{aiInsight.textReport}</pre>
+                </div>
+                <div className="bg-gray-800 p-6 rounded-lg">
+                  <h2 className="text-2xl font-bold mb-4 text-cyan-400">Machine-Readable JSON</h2>
+                  <pre className="whitespace-pre-wrap font-mono text-sm">{JSON.stringify(aiInsight.jsonReport, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+
+            <MetricsSection gameMetrics={data.gameMetrics} visionMetrics={data.visionMetrics} />
+            <PerformanceTrends trials={data.trial_results || data.performanceLog} />
+            <ConditionRiskFlags flags={data.riskFlags} />
+            <DetailedInsights insights={data.insights} />
           </div>
-        </motion.div>
 
-        {showContent && (
-          <>
-            {/* Core Metrics Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-              {/* Radar Chart */}
-              <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5, duration: 0.8 }}
-                className="bg-dark-card/80 backdrop-blur-md rounded-xl border border-gray-700/50 p-8"
-              >
-                <h2 className={`text-2xl font-bold font-poppins text-${getStressAccent()} mb-6 text-center`}>
-                  Cognitive Profile Overview
-                </h2>
-                <ResponsiveContainer width="100%" height={350}>
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="#374151" />
-                    <PolarAngleAxis dataKey="metric" className="text-gray-300 text-sm" />
-                    <PolarRadiusAxis 
-                      angle={90} 
-                      domain={[0, 100]} 
-                      className="text-gray-500"
-                      tick={false}
-                    />
-                    <Radar
-                      name="Score"
-                      dataKey="score"
-                      stroke="#22d3ee"
-                      fill="#22d3ee"
-                      fillOpacity={0.2}
-                      strokeWidth={3}
-                      filter="drop-shadow(0 0 6px #22d3ee)"
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </motion.div>
-
-              {/* Metric Cards */}
-              <div className="grid grid-cols-2 gap-4">
-                {cognitiveMetrics.map((metric, index) => (
-                  <motion.div
-                    key={metric.name}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 + index * 0.1 }}
-                    className="bg-dark-card/80 backdrop-blur-md rounded-xl border border-gray-700/50 p-6"
+          {/* Reports List Sidebar */}
+          <div className="md:col-span-1 bg-gray-800 p-6 rounded-lg">
+            <h2 className="text-2xl font-bold mb-4 text-cyan-400">All Reports</h2>
+            <div className="space-y-4 max-h-[80vh] overflow-y-auto">
+              {allReports.length > 0 ? (
+                allReports.map((report) => (
+                  <div
+                    key={report._id}
+                    onClick={() => handleReportSelection(report._id)}
+                    className={`p-4 rounded-lg cursor-pointer transition-colors ${
+                      reportId === report._id
+                        ? 'bg-cyan-600'
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
                   >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="text-cyan-400">{metric.icon}</div>
-                      <h3 className="text-lg font-semibold text-white">{metric.name}</h3>
-                    </div>
-                    <div className="text-3xl font-bold text-cyan-400">{metric.score}</div>
-                  </motion.div>
-                ))}
-              </div>
+                    <p className="font-bold">{report.gameType}</p>
+                    <p className="text-sm text-gray-300">User: {report.userId}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(report.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p>No reports found.</p>
+              )}
             </div>
-
-            {/* Simple Metrics Display */}
-            <div className="mb-12">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.2 }}
-                className="bg-dark-card/80 backdrop-blur-md rounded-xl border border-gray-700/50 p-6"
-              >
-                <h3 className="text-xl font-bold text-white mb-4">Performance Summary</h3>
-                <div className="text-gray-300">
-                  <p>Overall cognitive performance assessment completed.</p>
-                  <p className="mt-2">This report provides insights into various cognitive metrics.</p>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Placeholder for additional sections */}
-            <div className="mb-12">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.4 }}
-                className="bg-dark-card/80 backdrop-blur-md rounded-xl border border-gray-700/50 p-6"
-              >
-                <h3 className="text-xl font-bold text-white mb-4">Additional Insights</h3>
-                <div className="text-gray-300">
-                  <p>Detailed analysis and recommendations would appear here.</p>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Disclaimer */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.6, duration: 0.6 }}
-              className="bg-dark-card/60 backdrop-blur-md rounded-xl border border-gray-700/30 p-6 mb-8"
-            >
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-gray-400 leading-relaxed">
-                  <strong className="text-yellow-400">Medical Disclaimer:</strong> This is not a medical diagnosis. 
-                  Results highlight patterns and potential risk markers that may warrant further professional evaluation. 
-                  Consult with healthcare professionals for clinical assessment and treatment recommendations.
-                </p>
-              </div>
-            </motion.div>
-
-            {/* Action Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.8, duration: 0.6 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center"
-            >
-              <NeonButton onClick={handleDownload} variant="secondary" size="lg">
-                <div className="flex items-center space-x-2">
-                  <Download className="w-5 h-5" />
-                  <span>Download Report</span>
-                </div>
-              </NeonButton>
-              
-              <NeonButton onClick={handlePlayAgain} size="lg">
-                <div className="flex items-center space-x-2">
-                  <RotateCcw className="w-5 h-5" />
-                  <span>New Assessment</span>
-                </div>
-              </NeonButton>
-            </motion.div>
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );

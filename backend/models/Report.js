@@ -25,7 +25,9 @@ const reportSchema = new mongoose.Schema({
   gameMetrics: mongoose.Schema.Types.Mixed,      // free form for any game
   summary: [mongoose.Schema.Types.Mixed],
   aiAnalysis: { type: String },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  aiJsonReport: { type: Object },
+  aiTextReport: { type: String }
 }, { strict: false }); // allow any extra keys you might send later
 
 module.exports = mongoose.model('Report', reportSchema);

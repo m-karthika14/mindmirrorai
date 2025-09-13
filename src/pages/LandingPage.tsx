@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Brain, Zap, Target } from 'lucide-react';
 import NeonButton from '../components/ui/NeonButton';
-import ParticleBackground from '../components/layout/ParticleBackground';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,8 +12,66 @@ const LandingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen gradient-bg relative overflow-hidden">
-      <ParticleBackground />
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Vanta Net Background */}
+      <div
+        ref={(() => {
+          const vantaRef = React.useRef(null);
+          React.useEffect(() => {
+            let vantaEffect: any = null;
+            let threeScript = document.createElement('script');
+            threeScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js';
+            threeScript.async = true;
+            document.body.appendChild(threeScript);
+
+            let vantaScript = document.createElement('script');
+            vantaScript.src = 'https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js';
+            vantaScript.async = true;
+            document.body.appendChild(vantaScript);
+
+            function initVanta() {
+              // @ts-ignore
+              if (window.VANTA && window.VANTA.NET && vantaRef.current) {
+                // @ts-ignore
+                vantaEffect = window.VANTA.NET({
+                  el: vantaRef.current,
+                  mouseControls: true,
+                  touchControls: true,
+                  gyroControls: false,
+                  minHeight: 200.0,
+                  minWidth: 200.0,
+                  scale: 1.0,
+                  scaleMobile: 1.0,
+                  color: 0x0f0f23,
+                  backgroundColor: 0x0a0a0a,
+                  points: 20.0,
+                  maxDistance: 25.0,
+                  spacing: 20.0
+                });
+              }
+            }
+            function checkAndInit() {
+              // @ts-ignore
+              if (window.THREE && window.VANTA && window.VANTA.NET) {
+                initVanta();
+              } else {
+                setTimeout(checkAndInit, 100);
+              }
+            }
+            threeScript.onload = checkAndInit;
+            vantaScript.onload = checkAndInit;
+            return () => {
+              if (vantaEffect && typeof vantaEffect.destroy === 'function') {
+                vantaEffect.destroy();
+              }
+              if (threeScript) document.body.removeChild(threeScript);
+              if (vantaScript) document.body.removeChild(vantaScript);
+            };
+          }, []);
+          return vantaRef;
+        })()} 
+        className="absolute inset-0 w-full h-full"
+      />
       
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4">
         <motion.div

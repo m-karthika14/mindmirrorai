@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import NeuroBalanceMaze from './NeuroBalanceMaze';
 import ADHDGame from './adhdgame';
 import PTSDGame from './ptsdgame';
@@ -9,6 +10,7 @@ interface GameSequenceProps {
 
 const GameSequence: React.FC<GameSequenceProps> = () => {
   const [currentGame, setCurrentGame] = useState<'maze' | 'adhd' | 'ptsd'>('maze');
+  const navigate = useNavigate();
   
   const handleMazeComplete = () => {
     console.log('🎮 GameSequence: Maze game completed, transitioning to ADHD game...');
@@ -22,6 +24,11 @@ const GameSequence: React.FC<GameSequenceProps> = () => {
     console.log('🔄 GameSequence: Current game state before transition:', currentGame);
     setCurrentGame('ptsd');
     console.log('✅ GameSequence: State changed to ptsd');
+  };
+  
+  const handlePTSDComplete = () => {
+    console.log('🎮 GameSequence: All games completed! Navigating to report page...');
+    navigate('/report');
   };
   
   // Debug logging for state changes
@@ -44,7 +51,7 @@ const GameSequence: React.FC<GameSequenceProps> = () => {
         <ADHDGame onGameComplete={handleADHDComplete} />
       )}
       {currentGame === 'ptsd' && (
-        <PTSDGame onGameComplete={() => console.log('🎮 All games completed!')} />
+        <PTSDGame onGameComplete={handlePTSDComplete} />
       )}
     </div>
   );
