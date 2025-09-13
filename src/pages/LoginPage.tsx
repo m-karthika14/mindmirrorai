@@ -22,17 +22,33 @@ const LoginPage: React.FC = () => {
       });
 
       if (response.ok) {
-        console.log('Login data saved');
+        const data = await response.json();
+        console.log('Login successful:', data);
+        
+        // Save user data to localStorage
+        localStorage.setItem('userId', data.userId);
+        localStorage.setItem('userEmail', data.email);
+        localStorage.setItem('isLoggedIn', 'true');
+        
         navigate('/home');
       } else {
-        console.error('Failed to save login data');
+        const errorData = await response.json();
+        console.error('Failed to login:', errorData);
+        alert('Login failed: ' + errorData.message);
       }
     } catch (error) {
       console.error('Error during login:', error);
+      alert('An error occurred during login. Please try again.');
     }
   };
 
   const handleGuestLogin = () => {
+    // Set guest user data
+    const guestId = 'guest_' + Date.now();
+    localStorage.setItem('userId', guestId);
+    localStorage.setItem('userEmail', 'guest@mindmirror.ai');
+    localStorage.setItem('isLoggedIn', 'guest');
+    
     navigate('/home');
   };
 

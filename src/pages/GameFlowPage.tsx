@@ -1,26 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import ProgressBar from '../components/ui/ProgressBar';
-import VirtualTyping from '../components/games/VirtualTyping';
-import MazeGame from '../components/games/MazeGame';
-import GoNoGoReaction from '../components/games/GoNoGoReaction';
-import NBackMemory from '../components/games/NBackMemory';
-import TrailMakingTest from '../components/games/TrailMakingTest';
+import GameSequence from '../components/games/GameSequence';
 
 const GameFlowPage: React.FC = () => {
-  const navigate = useNavigate();
-  const [currentGameIndex, setCurrentGameIndex] = useState(0);
-  const [gameScores, setGameScores] = useState<number[]>([]);
+  const [currentGameIndex] = useState(0);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const [sessionStartTime] = useState(Date.now());
 
   const games = [
-    { component: VirtualTyping, name: 'Typing' },
-    { component: MazeGame, name: 'Maze' },
-    { component: GoNoGoReaction, name: 'Reaction' },
-    { component: NBackMemory, name: 'Memory' },
-    { component: TrailMakingTest, name: 'Trails' },
+    // { component: VirtualTyping, name: 'Typing' },
+    { component: GameSequence, name: 'Cognitive Games' },
+    // { component: GoNoGoReaction, name: 'Reaction' },
+    // { component: NBackMemory, name: 'Memory' },
+    // { component: TrailMakingTest, name: 'Trails' },
   ];
 
   const gameNames = games.map(game => game.name);
@@ -33,23 +26,6 @@ const GameFlowPage: React.FC = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, [sessionStartTime]);
-
-  const handleGameComplete = (score: number) => {
-    const newScores = [...gameScores, score];
-    setGameScores(newScores);
-
-    if (currentGameIndex < games.length - 1) {
-      setTimeout(() => {
-        setCurrentGameIndex(currentGameIndex + 1);
-      }, 3000);
-    } else {
-      // Store scores in sessionStorage for the report page
-      sessionStorage.setItem('gameScores', JSON.stringify(newScores));
-      setTimeout(() => {
-        navigate('/report');
-      }, 3000);
-    }
-  };
 
   return (
     <div className="min-h-screen gradient-bg">
@@ -70,7 +46,7 @@ const GameFlowPage: React.FC = () => {
           className="bg-dark-card bg-opacity-30 backdrop-blur-md rounded-2xl neon-border min-h-[600px]"
         >
           {CurrentGameComponent && (
-            <CurrentGameComponent onComplete={handleGameComplete} />
+            <CurrentGameComponent />
           )}
         </motion.div>
       </div>
